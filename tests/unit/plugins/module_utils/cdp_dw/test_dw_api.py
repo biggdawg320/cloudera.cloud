@@ -894,6 +894,173 @@ class TestCdpDwClientVw:
             },
         )
 
+    def test_create_vw_translates_autoscaling_and_impala_ha_keys(self, mocker):
+        """create_vw translates autoscaling/impala_ha snake_case keys to camelCase."""
+        api_client = mocker.create_autospec(CdpClient, instance=True)
+        api_client.post.side_effect = [
+            {"vwId": VW_ID},
+            {"vw": {"id": VW_ID, "name": VW_NAME, "vwType": "impala"}},
+        ]
+
+        client = CdpDwClient(api_client=api_client)
+        client.create_vw(
+            cluster_id=CLUSTER_ID,
+            dbc_id=DBC_ID,
+            vw_type="impala",
+            name=VW_NAME,
+            autoscaling={
+                "min_nodes": 1,
+                "max_nodes": 4,
+                "disable_auto_suspend": False,
+                "auto_suspend_timeout_seconds": 600,
+                "impala_scale_up_delay_seconds": 20,
+                "impala_scale_down_delay_seconds": 300,
+            },
+            impala_ha={
+                "enable_shutdown_of_coordinator": True,
+                "enable_catalog_high_availability": True,
+                "high_availability_mode": "ACTIVE_PASSIVE",
+                "num_of_active_coordinators": 2,
+                "shutdown_of_coordinator_delay_seconds": 300,
+            },
+        )
+
+        create_call = api_client.post.call_args_list[0]
+        posted_data = create_call.kwargs["data"]
+
+        assert posted_data["autoscaling"] == {
+            "minClusters": 1,
+            "maxClusters": 4,
+            "disableAutoSuspend": False,
+            "autoSuspendTimeoutSeconds": 600,
+            "impalaScaleUpDelaySeconds": 20,
+            "impalaScaleDownDelaySeconds": 300,
+        }
+        assert posted_data["impalaHaSettings"] == {
+            "enableShutdownOfCoordinator": True,
+            "enableCatalogHighAvailability": True,
+            "highAvailabilityMode": "ACTIVE_PASSIVE",
+            "numOfActiveCoordinators": 2,
+            "shutdownOfCoordinatorDelaySeconds": 300,
+        }
+
+    def test_create_vw_autoscaling_omits_none_preserves_false_and_zero(self, mocker):
+        """create_vw omits unset (None) autoscaling/impala_ha values but keeps False/0.
+
+        None is the dominant case in practice, since Ansible fills unsupplied
+        suboptions as None; explicit False and 0 must still be sent.
+        """
+        api_client = mocker.create_autospec(CdpClient, instance=True)
+        api_client.post.side_effect = [
+            {"vwId": VW_ID},
+            {"vw": {"id": VW_ID, "name": VW_NAME, "vwType": "impala"}},
+        ]
+
+        client = CdpDwClient(api_client=api_client)
+        client.create_vw(
+            cluster_id=CLUSTER_ID,
+            dbc_id=DBC_ID,
+            vw_type="impala",
+            name=VW_NAME,
+            autoscaling={
+                "min_nodes": 0,
+                "max_nodes": 4,
+                "disable_auto_suspend": False,
+                "auto_suspend_timeout_seconds": None,
+                "impala_scale_up_delay_seconds": None,
+                "impala_scale_down_delay_seconds": None,
+                "hive_desired_free_capacity": None,
+                "hive_scale_wait_time_seconds": None,
+                "pod_config_name": None,
+            },
+            impala_ha={
+                "enable_shutdown_of_coordinator": False,
+                "enable_catalog_high_availability": None,
+                "high_availability_mode": None,
+                "num_of_active_coordinators": 0,
+                "shutdown_of_coordinator_delay_seconds": None,
+            },
+        )
+
+        create_call = api_client.post.call_args_list[0]
+        posted_data = create_call.kwargs["data"]
+
+        assert posted_data["autoscaling"] == {
+            "minClusters": 0,
+            "maxClusters": 4,
+            "disableAutoSuspend": False,
+        }
+        assert posted_data["impalaHaSettings"] == {
+            "enableShutdownOfCoordinator": False,
+            "numOfActiveCoordinators": 0,
+        }
+
+    def test_create_vw_translates_hive_autoscaling_keys(self, mocker):
+        """create_vw translates the Hive-specific autoscaling suboptions too."""
+        api_client = mocker.create_autospec(CdpClient, instance=True)
+        api_client.post.side_effect = [
+            {"vwId": VW_ID},
+            {"vw": {"id": VW_ID, "name": VW_NAME, "vwType": "hive"}},
+        ]
+
+        client = CdpDwClient(api_client=api_client)
+        client.create_vw(
+            cluster_id=CLUSTER_ID,
+            dbc_id=DBC_ID,
+            vw_type="hive",
+            name=VW_NAME,
+            autoscaling={
+                "hive_desired_free_capacity": 2,
+                "hive_scale_wait_time_seconds": 120,
+                "pod_config_name": "default",
+            },
+        )
+
+        create_call = api_client.post.call_args_list[0]
+        posted_data = create_call.kwargs["data"]
+
+        assert posted_data["autoscaling"] == {
+            "hiveDesiredFreeCapacity": 2,
+            "hiveScaleWaitTimeSeconds": 120,
+            "podConfigName": "default",
+        }
+
+    def test_update_vw_translates_autoscaling_and_impala_ha_keys(self, mocker):
+        """update_vw translates autoscaling/impala_ha snake_case keys to camelCase."""
+        api_client = mocker.create_autospec(CdpClient, instance=True)
+        api_client.post.side_effect = [
+            {},
+            {"vw": {"id": VW_ID, "name": VW_NAME, "vwType": "impala"}},
+        ]
+
+        client = CdpDwClient(api_client=api_client)
+        client.update_vw(
+            cluster_id=CLUSTER_ID,
+            vw_id=VW_ID,
+            autoscaling={
+                "min_nodes": 0,
+                "max_nodes": 4,
+                "disable_auto_suspend": False,
+            },
+            impala_ha={
+                "enable_shutdown_of_coordinator": False,
+                "num_of_active_coordinators": 0,
+            },
+        )
+
+        update_call = api_client.post.call_args_list[0]
+        posted_data = update_call.kwargs["data"]
+
+        assert posted_data["autoscaling"] == {
+            "minClusters": 0,
+            "maxClusters": 4,
+            "disableAutoSuspend": False,
+        }
+        assert posted_data["impalaHaSettings"] == {
+            "enableShutdownOfCoordinator": False,
+            "numOfActiveCoordinators": 0,
+        }
+
     def test_create_vw_no_id_returns_none(self, mocker):
         """create_vw returns None (and skips describe) when no vwId is returned."""
         api_client = mocker.create_autospec(CdpClient, instance=True)

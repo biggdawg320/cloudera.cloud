@@ -112,6 +112,49 @@ class DwSecret:
     properties: Union[DwSecretProperties, None, NULLABLE] = NULLABLE
 
 
+_AUTOSCALING_KEY_MAP = {
+    "min_nodes": "minClusters",
+    "max_nodes": "maxClusters",
+    "disable_auto_suspend": "disableAutoSuspend",
+    "auto_suspend_timeout_seconds": "autoSuspendTimeoutSeconds",
+    "impala_scale_up_delay_seconds": "impalaScaleUpDelaySeconds",
+    "impala_scale_down_delay_seconds": "impalaScaleDownDelaySeconds",
+    "hive_desired_free_capacity": "hiveDesiredFreeCapacity",
+    "hive_scale_wait_time_seconds": "hiveScaleWaitTimeSeconds",
+    "pod_config_name": "podConfigName",
+}
+
+_IMPALA_HA_KEY_MAP = {
+    "enable_shutdown_of_coordinator": "enableShutdownOfCoordinator",
+    "enable_catalog_high_availability": "enableCatalogHighAvailability",
+    "high_availability_mode": "highAvailabilityMode",
+    "num_of_active_coordinators": "numOfActiveCoordinators",
+    "shutdown_of_coordinator_delay_seconds": "shutdownOfCoordinatorDelaySeconds",
+}
+
+
+def _translate_keys(
+    values: Optional[Dict[str, Any]],
+    key_map: Dict[str, str],
+) -> Optional[Dict[str, Any]]:
+    """
+    Translate the known keys of a dict to their REST API equivalents.
+
+    Keys not present in C(key_map) are passed through unchanged. Keys whose
+    value is C(None) are omitted, while C(False) and C(0) are preserved.
+
+    Args:
+        values: Ansible parameter dict (snake_case keys), or None
+        key_map: Mapping of snake_case keys to their camelCase API keys
+
+    Returns:
+        A new dict with translated keys, or None if C(values) is None
+    """
+    if values is None:
+        return None
+    return {key_map.get(k, k): v for k, v in values.items() if v is not None}
+
+
 class CdpDwClient:
     """CDP Data Warehouse API client."""
 
@@ -458,9 +501,9 @@ class CdpDwClient:
             "tShirtSize": tshirt_size,
             "nodeCount": node_count,
             "instanceType": instance_type,
-            "autoscaling": autoscaling,
+            "autoscaling": _translate_keys(autoscaling, _AUTOSCALING_KEY_MAP),
             "config": config,
-            "impalaHaSettings": impala_ha,
+            "impalaHaSettings": _translate_keys(impala_ha, _IMPALA_HA_KEY_MAP),
             "tags": tags,
             "enableUnifiedAnalytics": enable_unified_analytics,
             "platformJwtAuth": enable_platform_jwt_auth,
@@ -519,8 +562,8 @@ class CdpDwClient:
             "tShirtSize": tshirt_size,
             "nodeCount": node_count,
             "config": config,
-            "autoscaling": autoscaling,
-            "impalaHaSettings": impala_ha,
+            "autoscaling": _translate_keys(autoscaling, _AUTOSCALING_KEY_MAP),
+            "impalaHaSettings": _translate_keys(impala_ha, _IMPALA_HA_KEY_MAP),
         }
         data.update({k: v for k, v in optional.items() if v is not None})
         if associated_connectors is not None:
